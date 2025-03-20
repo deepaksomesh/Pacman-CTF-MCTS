@@ -10,7 +10,7 @@
 # (denero@cs.berkeley.edu) and Dan Klein (klein@cs.berkeley.edu).
 # Student side autograding was added by Brad Miller, Nick Hay, and
 # Pieter Abbeel (pabbeel@cs.berkeley.edu).
-
+import numpy as np
 
 from captureAgents import CaptureAgent
 import random, time, util
@@ -22,7 +22,7 @@ import game
 #################
 
 def createTeam(firstIndex, secondIndex, isRed,
-               first = 'DummyAgent', second = 'DummyAgent'):
+               first = 'AttackAgent', second = 'DefenseAgent'):
   """
   This function should return a list of two agents that will form the
   team, initialized using firstIndex and secondIndex as their agent
@@ -40,6 +40,27 @@ def createTeam(firstIndex, secondIndex, isRed,
 
   # The following line is an example only; feel free to change it.
   return [eval(first)(firstIndex), eval(second)(secondIndex)]
+
+##########
+# MCTS   #
+##########
+class mctsNode:
+    def __int__(self, action, parent):
+        self.action = action
+        self.parent = parent
+        self.Q_value = 0
+        self.N = 1
+        self.child = []
+        self.epsilon = 1
+
+
+    def select_node(self):
+      best_child_node = None
+      best_score = -np.inf
+
+
+
+
 
 ##########
 # Agents #
