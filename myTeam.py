@@ -44,19 +44,36 @@ def createTeam(firstIndex, secondIndex, isRed,
 ##########
 # MCTS   #
 ##########
-class mctsNode:
-    def __int__(self, action, parent):
+class Node(object):
+
+    def __int__(self, gameState, agent, action, parent):
+        self.gameState = gameState.deepCopy()
         self.action = action
         self.parent = parent
+        self.agent = agent
+        self.legalActions = [act for act in gameState.getLegalActions(agent.index) if act != 'Stop']
+        self.unexploredActions = self.legalActions[:]
         self.Q_value = 0
-        self.N = 1
+        self.N_visits = 0
         self.child = []
         self.epsilon = 1
+        self.reward = 0
 
+    def is_fully_expanded(self):
+        legal_action = self.gameState.getLegalActions(0)
+        return len(self.child) == len(legal_action)
 
-    def select_node(self):
-      best_child_node = None
-      best_score = -np.inf
+    def expand_node(self):
+        executed_actions = [children.action for children in self.child]
+        actions_available = self.gameState.getLegalActions(0)
+
+        for action in actions_available:
+            if action not in executed_actions:
+                next_state = self.gameState.generateSuccessor(0, action)
+                child_node = Node(next_state, self.agent, action, self)
+                self.child.append(child_node)
+                return child_node
+
 
 
 
