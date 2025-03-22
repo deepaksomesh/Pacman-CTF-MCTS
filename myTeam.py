@@ -23,20 +23,6 @@ import game
 
 def createTeam(firstIndex, secondIndex, isRed,
                first = 'AttackAgent', second = 'DefenseAgent'):
-  """
-  This function should return a list of two agents that will form the
-  team, initialized using firstIndex and secondIndex as their agent
-  index numbers.  isRed is True if the red team is being created, and
-  will be False if the blue team is being created.
-
-  As a potentially helpful development aid, this function can take
-  additional string-valued keyword arguments ("first" and "second" are
-  such arguments in the case of this function), which will come from
-  the --redOpts and --blueOpts command-line arguments to capture.py.
-  For the nightly contest, however, your team will be created without
-  any extra arguments, so you should make sure that the default
-  behavior is what you want for the nightly contest.
-  """
 
   # The following line is an example only; feel free to change it.
   return [eval(first)(firstIndex), eval(second)(secondIndex)]
@@ -44,14 +30,13 @@ def createTeam(firstIndex, secondIndex, isRed,
 ##########
 # MCTS   #
 ##########
-class Node(object):
-
-    def __int__(self, gameState, agent, action, parent):
+class Node:
+    def __init__(self, gameState, agent, action, parent):
         self.gameState = gameState.deepCopy()
         self.action = action
         self.parent = parent
         self.agent = agent
-        self.legalActions = [act for act in gameState.getLegalActions(agent.index) if act != 'Stop']
+        self.legalActions = [act for act in gameState.getLegalActions(agent.index) if act != Directions.STOP]
         self.unexploredActions = self.legalActions[:]
         self.Q_value = 0
         self.N_visits = 0
@@ -60,20 +45,49 @@ class Node(object):
         self.reward = 0
 
     def is_fully_expanded(self):
-        legal_action = self.gameState.getLegalActions(0)
-        return len(self.child) == len(legal_action)
+        return len(self.child) == len(self.legalActions)
 
     def expand_node(self):
+        if self.is_fully_expanded():
+            return self
         executed_actions = [children.action for children in self.child]
-        actions_available = self.gameState.getLegalActions(0)
+        actions_available = self.unexploredActions.pop()
 
         for action in actions_available:
             if action not in executed_actions:
-                next_state = self.gameState.generateSuccessor(0, action)
+                next_state = self.gameState.generateSuccessor(self.agent.index, action)
                 child_node = Node(next_state, self.agent, action, self)
                 self.child.append(child_node)
                 return child_node
 
+class MCTSAgent:
+    def __init__(self, index, simulations=100, exploration=1.4, rollout_depth=10):
+        self.C = exploration
+        self.simulations = simulations
+        self.rollout_depth = rollout_depth
+
+    def selection(self, node):
+        best_reward = float('-inf')
+        best_child_node = None
+        for children in node.child:
+            reward = children.node.Q_value / children.node.N_visits
+            if reward > best_reward:
+                best_reward = reward
+                best_child_node = children
+        return best_child_node
+
+    def select_and_expand(self,node):
+        if util.flipCoin(node.epsilon):
+            next_best_node = self.selection(node)
+        else:
+            next_best_node = random.choice(node.child)
+        return next_best_node.node.expand_node()
+
+    def backpropagate(self, node, reward):
+        node.N_visits += 1
+        node.Q_value += reward
+        if node.parent is not None:
+            node.parent.backpropagate(node, reward)
 
 
 
