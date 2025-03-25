@@ -13,7 +13,7 @@ import math
 #################
 
 def createTeam(firstIndex, secondIndex, isRed,
-               first='OffensiveAgent', second='DefensiveAgent'):
+               first='OffensiveAgent', second='DefensiveReflexAgent'):
     # The following line is an example only; feel free to change it.
     return [eval(first)(firstIndex), eval(second)(secondIndex)]
 
@@ -22,9 +22,9 @@ max_depth = 10  # Reduced max_depth for faster execution
 
 
 #####################
-# Structure for UCT #
+# MCTS with UCT     #
 #####################
-class MCTSNode(object):
+class MCTS(object):
 
     def __init__(self, gameState, agent, action, parent, enemy, crossline):
         self.parent = parent
@@ -38,7 +38,7 @@ class MCTSNode(object):
         self.gameState = gameState.deepCopy()
         self.enemy = enemy
         self.legalActions = [act for act in gameState.getLegalActions(agent.index) if act != Directions.STOP]
-        self.unexploredActions = self.legalActions[:]
+        self.available_actions = self.legalActions[:]
         self.crossline = crossline
 
         self.agent = agent
@@ -49,10 +49,10 @@ class MCTSNode(object):
         if self.depth >= max_depth:
             return self
 
-        if self.unexploredActions:  # Check if unexploredActions is not empty.
-            action = self.unexploredActions.pop()
+        if self.available_actions:  # Check if unexploredActions is not empty.
+            action = self.available_actions.pop()
             next_game_state = self.gameState.generateSuccessor(self.agent.index, action)
-            child_node = MCTSNode(next_game_state, self.agent, action, self, self.enemy, self.crossline)
+            child_node = MCTS(next_game_state, self.agent, action, self, self.enemy, self.crossline)
             self.child.append(child_node)
             return child_node
 
@@ -110,7 +110,6 @@ class MCTSNode(object):
 ##########
 # Agents #
 ##########
-
 
 class OffensiveAgent(CaptureAgent):
 
@@ -199,11 +198,11 @@ class OffensiveAgent(CaptureAgent):
             action_chosen = random.choice(bestActions)
 
         elif len(foodList) < 2 or carrying > 7:
-            rootNode = MCTSNode(gameState, self, None, None, appr_ghost_pos, self.friendly_borders)
-            action_chosen = MCTSNode.run_mcts(rootNode)
+            rootNode = MCTS(gameState, self, None, None, appr_ghost_pos, self.friendly_borders)
+            action_chosen = MCTS.run_mcts(rootNode)
         else:
-            rootNode = MCTSNode(gameState, self, None, None, appr_ghost_pos, self.friendly_borders)
-            action_chosen = MCTSNode.run_mcts(rootNode)
+            rootNode = MCTS(gameState, self, None, None, appr_ghost_pos, self.friendly_borders)
+            action_chosen = MCTS.run_mcts(rootNode)
 
         return action_chosen
 
@@ -226,12 +225,12 @@ class OffensiveAgent(CaptureAgent):
 
         features = util.Counter()
         weights = {'minDistToFood': -1, 'getFood': 100}
-        next_tate = self.get_next_state(gameState, action)
-        if next_tate.getAgentState(self.index).numCarrying > gameState.getAgentState(self.index).numCarrying:
+        next_state = self.get_next_state(gameState, action)
+        if next_state.getAgentState(self.index).numCarrying > gameState.getAgentState(self.index).numCarrying:
             features['getFood'] = 1
         else:
-            if len(self.getFood(next_tate).asList()) > 0:
-                features['minDistToFood'] = self.get_min_dist_to_food(next_tate)
+            if len(self.getFood(next_state).asList()) > 0:
+                features['minDistToFood'] = self.get_min_dist_to_food(next_state)
         return features * weights
 
     def evaluate_def(self, gameState, action, ghosts):
@@ -273,7 +272,7 @@ class OffensiveAgent(CaptureAgent):
         return min([self.getMazeDistance(myPos, f) for f in self.getFood(gameState).asList()])
 
 
-class DefensiveAgent(OffensiveAgent):
+class DefensiveReflexAgent(OffensiveAgent):
     """
     A reflex agent that keeps its side Pacman-free. Again,
     this is to give you an idea of what a defensive agent
