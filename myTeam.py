@@ -18,8 +18,6 @@ def createTeam(firstIndex, secondIndex, isRed,
     return [eval(first)(firstIndex), eval(second)(secondIndex)]
 
 
-max_depth = 10  # Reduced max_depth for faster execution
-
 
 #####################
 # MCTS with UCT     #
@@ -29,6 +27,7 @@ class MCTS(object):
     def __init__(self, gameState, agent, action, parent, enemy, crossline):
         self.parent = parent
         self.action = action
+        self.max_node_depth = 10
         self.depth = parent.depth + 1 if parent else 0
 
         self.child = []
@@ -44,9 +43,8 @@ class MCTS(object):
         self.agent = agent
         self.rewards = 0
 
-
     def select_and_expand(self):
-        if self.depth >= max_depth:
+        if self.depth >= self.max_node_depth:
             return self
 
         if self.available_actions:  # Check if unexploredActions is not empty.
@@ -58,20 +56,10 @@ class MCTS(object):
 
         # Simplified exploration/exploitation with a bias towards exploitation (less random)
         if self.child:  # Check if there are any children before trying to choose one.
-            next_best_node = self.best_child_node()
-            return next_best_node.select_and_expand()
+            return self.best_child_node().select_and_expand()
         else:
             return self  # Return self if no children to expand
 
-    def run_mcts(self):
-        timeLimit = 0.95  # Slightly reduced for safety
-        start = time.time()
-        while (time.time() - start < timeLimit):
-            node_selected = self.select_and_expand()
-            reward = node_selected.reward()
-            node_selected.backpropagation(reward)
-
-        return self.best_child_node().action
 
     def best_child_node(self):
         best_score = -np.inf
@@ -105,6 +93,17 @@ class MCTS(object):
         value = feature * weights
         return value
 
+    def run_mcts(self):
+        time_limit = 0.95  # Slightly reduced for safety
+        start = time.time()
+        end_time = start + time_limit
+        while time.time() < end_time:
+            node_selected = self.select_and_expand()
+            reward = node_selected.reward()
+            node_selected.backpropagation(reward)
+
+        return self.best_child_node().action
+
 # --------------------------------------------------------------------------
 
 ##########
@@ -115,23 +114,23 @@ class OffensiveAgent(CaptureAgent):
 
     def registerInitialState(self, gameState):
         CaptureAgent.registerInitialState(self, gameState)
-        self.arena_width = gameState.data.layout.width
-        self.arena_height = gameState.data.layout.height
-        self.friendly_borders = self.detect_my_border(gameState)
+        self.layout_width = gameState.data.layout.width
+        self.layout_height = gameState.data.layout.height
+        self.borders = self.detect_borders(gameState)
 
-    def detect_my_border(self, gameState):
+    def detect_borders(self, gameState):
         """
         Return borders position
         """
         walls = gameState.getWalls().asList()
         if self.red:
-            border_x = self.arena_width // 2 - 1
+            border_x = self.layout_width // 2 - 1
         else:
-            border_x = self.arena_width // 2
-        border_line = [(border_x, h) for h in range(self.arena_height)]
+            border_x = self.layout_width // 2
+        border_line = [(border_x, h) for h in range(self.layout_height)]
         return [(x, y) for (x, y) in border_line if (x, y) not in walls and (x + 1 - 2*self.red, y) not in walls]
 
-    def detect_enemy_ghost(self, gameState):
+    def enemy(self, gameState):
         """
         Return Observable Oppo-Ghost Index
         """
@@ -144,12 +143,12 @@ class OffensiveAgent(CaptureAgent):
                     enemyList.append(enemy)
         return enemyList
 
-    def detect_enemy_approaching(self, gameState):
+    def detect_enemy(self, gameState):
         """
         Return Observable Oppo-Ghost Position Within 5 Steps
         """
         dangerGhosts = []
-        ghosts = self.detect_enemy_ghost(gameState)
+        ghosts = self.enemy(gameState)
         myPos = gameState.getAgentPosition(self.index)
         for g in ghosts:
             distance = self.getMazeDistance(myPos, gameState.getAgentPosition(g))
@@ -157,22 +156,10 @@ class OffensiveAgent(CaptureAgent):
                 dangerGhosts.append(g)
         return dangerGhosts
 
-    def detect_enemy_pacman(self, gameState):
-        """
-        Return Observable Oppo-Pacman Position
-        """
-        enemyList = []
-        for enemy in self.getOpponents(gameState):
-            enemyState = gameState.getAgentState(enemy)
-            if enemyState.isPacman and gameState.getAgentPosition(enemy) != None:
-                enemyList.append(enemy)
-        return enemyList
-
     def chooseAction(self, gameState):
         """
         Picks best actions.
         """
-        start = time.time()
         actions = gameState.getLegalActions(self.index)
         agent_state = gameState.getAgentState(self.index)
 
@@ -188,20 +175,20 @@ class OffensiveAgent(CaptureAgent):
         """
         Handles offensive strategy when agent is Pacman.
         """
-        appr_ghost_pos = [gameState.getAgentPosition(g) for g in self.detect_enemy_approaching(gameState)]
+        appr_ghost_pos = [gameState.getAgentPosition(g) for g in self.detect_enemy(gameState)]
         foodList = self.getFood(gameState).asList()
 
         if not appr_ghost_pos:
-            values = [self.evaluate_off(gameState, a) for a in actions]
+            values = [self.evaluate_state_off(gameState, a) for a in actions]
             maxValue = max(values)
             bestActions = [a for a, v in zip(actions, values) if v == maxValue]
             action_chosen = random.choice(bestActions)
 
         elif len(foodList) < 2 or carrying > 7:
-            rootNode = MCTS(gameState, self, None, None, appr_ghost_pos, self.friendly_borders)
+            rootNode = MCTS(gameState, self, None, None, appr_ghost_pos, self.borders)
             action_chosen = MCTS.run_mcts(rootNode)
         else:
-            rootNode = MCTS(gameState, self, None, None, appr_ghost_pos, self.friendly_borders)
+            rootNode = MCTS(gameState, self, None, None, appr_ghost_pos, self.borders)
             action_chosen = MCTS.run_mcts(rootNode)
 
         return action_chosen
@@ -210,15 +197,15 @@ class OffensiveAgent(CaptureAgent):
         """
         Handles defensive strategy when agent is not Pacman.
         """
-        ghosts = self.detect_enemy_ghost(gameState)
-        values = [self.evaluate_def(gameState, a, ghosts) for a in actions]
+        ghosts = self.enemy(gameState)
+        values = [self.evaluate_state_def(gameState, a, ghosts) for a in actions]
         maxValue = max(values)
         bestActions = [a for a, v in zip(actions, values) if v == maxValue]
         action_chosen = random.choice(bestActions)
 
         return action_chosen
 
-    def evaluate_off(self, gameState, action):
+    def evaluate_state_off(self, gameState, action):
         """
         Computes a linear combination of features and feature weights
         """
@@ -226,14 +213,15 @@ class OffensiveAgent(CaptureAgent):
         features = util.Counter()
         weights = {'minDistToFood': -1, 'getFood': 100}
         next_state = self.get_next_state(gameState, action)
+        my_pos = next_state.getAgentPosition(self.index)
         if next_state.getAgentState(self.index).numCarrying > gameState.getAgentState(self.index).numCarrying:
             features['getFood'] = 1
         else:
             if len(self.getFood(next_state).asList()) > 0:
-                features['minDistToFood'] = self.get_min_dist_to_food(next_state)
+                features['minDistToFood'] = min([self.getMazeDistance(my_pos, f) for f in self.getFood(next_state).asList()])
         return features * weights
 
-    def evaluate_def(self, gameState, action, ghosts):
+    def evaluate_state_def(self, gameState, action, ghosts):
         """
         Computes a linear combination of features and feature weights
         """
@@ -266,11 +254,6 @@ class OffensiveAgent(CaptureAgent):
         """
         successor = gameState.generateSuccessor(self.index, action)
         return successor
-
-    def get_min_dist_to_food(self, gameState):
-        myPos = gameState.getAgentPosition(self.index)
-        return min([self.getMazeDistance(myPos, f) for f in self.getFood(gameState).asList()])
-
 
 class DefensiveReflexAgent(OffensiveAgent):
     """
