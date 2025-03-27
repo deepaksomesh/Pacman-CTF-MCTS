@@ -88,7 +88,7 @@ class MCTS(object):
         feature = util.Counter()
         weights = {'distance': -1}
         current_pos = self.gameState.getAgentPosition(self.agent.index)
-        feature['distance'] = min([self.agent.getMazeDistance(current_pos, borderPos) for borderPos in self.crossline])
+        feature['distance'] = min([self.agent.getMazeDistance(current_pos, crossline_pos) for crossline_pos in self.crossline])
 
         value = feature * weights
         return value
