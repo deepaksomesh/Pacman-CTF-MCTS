@@ -86,14 +86,22 @@ class MCTS(object):
             self.parent.backpropagation(reward)
 
     def heavy_playout(self):
+        """
+        Performs a rollout from the given state using random actions.
+        """
+        total_reward = 0
 
-        for _ in range(self.max_node_depth):
-            if not self.legalActions:
+        for _ in range(self.max_node_depth):  # Simulate 'rollout_depth' steps
+            actions = self.legalActions
+
+            if not actions: # No legal actions, end the rollout.
                 break
 
-            action = random.choice(self.legalActions)
+            action = random.choice(actions)
             current_state = self.gameState.generateSuccessor(self.agent.index, action)
-            return self.evaluate_rollout_state(current_state)
+            total_reward += self.evaluate_rollout_state(current_state)  # Accumulate rewards.
+
+        return total_reward / (self.max_node_depth+1e-6)  # Return the average reward.
 
     def evaluate_rollout_state(self, state):
 
@@ -107,37 +115,15 @@ class MCTS(object):
         feature['distance'] = min(
             [self.agent.getMazeDistance(current_pos, crossline_pos) for crossline_pos in self.crossline])
 
-        # Consider the number of food eaten during the rollout
-        food_eaten = self.agent.getFood(self.gameState).count() - self.agent.getFood(state).count()
-        feature['food_eaten'] = food_eaten
-        weights['food_eaten'] = 100  # Assign a positive weight to food eaten
-
         value = feature * weights
         return value
-
-    def heavy_reward(self):
-        # return self.heavy_playout(self.gameState) #Replace current rewards with heavy playout
-
-        # Combine immediate reward with heavy playout
-        immediate_reward = self.reward()
-        heavy_playout_reward = self.heavy_playout()  # Pass gameState to heavy_playout
-
-        # Adjust the weighting between immediate and rollout rewards as needed
-        return 0.2 * immediate_reward + 0.8 * heavy_playout_reward
 
     def reward(self):
-        current_pos = self.gameState.getAgentPosition(self.agent.index)
-        # Penalize returning to the start, but less severely
-        if current_pos == self.gameState.getInitialAgentPosition(self.agent.index):
-            return -100
-
-        feature = util.Counter()
-        weights = {'distance': -1}
-        current_pos = self.gameState.getAgentPosition(self.agent.index)
-        feature['distance'] = min([self.agent.getMazeDistance(current_pos, crossline_pos) for crossline_pos in self.crossline])
-
-        value = feature * weights
-        return value
+        """
+        Calculates the reward for this node.  It now calls heavy_playout.
+        """
+        reward = self.heavy_playout()
+        return reward  # Return reward from rollout
 
     def run_mcts(self):
         time_limit = 0.95  # Slightly reduced for safety
@@ -145,7 +131,7 @@ class MCTS(object):
         end_time = start + time_limit
         while time.time() < end_time:
             node_selected = self.select_and_expand()
-            reward = node_selected.heavy_reward()
+            reward = node_selected.reward()
             node_selected.backpropagation(reward)
 
         return self.best_child_node().action
