@@ -37,7 +37,7 @@ class MCTS(object):
         self.amaf_visits = {}  # Dictionary to track AMAF visits per action
         self.amaf_values = {}  # Dictionary to track AMAF values per action
         self.action_history = [] if parent is None else parent.action_history + [action]
-        self.beta = 1000
+        self.beta = 1500
 
         self.gameState = gameState.deepCopy()
         self.enemy = enemy
@@ -69,11 +69,26 @@ class MCTS(object):
     def best_child_node(self):
         best_score = -np.inf
         best_child = None
-        c = 1.4  # Exploration constant, adjust as needed. Smaller values favor exploitation
+        c = 1  # Exploration constant, adjust as needed. Smaller values favor exploitation
 
         for candidate in self.child:
-            score = candidate.q_value / (candidate.visits + 1e-6) + c * math.sqrt(
-                math.log(self.visits + 1) / (candidate.visits + 1e-6))  # Adding small value to avoid division by zero
+            if candidate.visits == 0:
+                return candidate
+            # Regular UCT value
+            q_value = candidate.q_value / candidate.visits
+            exploration = math.sqrt(math.log(self.visits) / candidate.visits)
+
+            # RAVE value
+            amaf_visits = self.amaf_visits.get(candidate.action, 0)
+            amaf_value = self.amaf_values.get(candidate.action, 0) / (amaf_visits if amaf_visits > 0 else 1)
+
+            # Beta parameter for mixing Q and AMAF values
+            beta = amaf_visits / (
+                    candidate.visits + amaf_visits + self.beta * candidate.visits * amaf_visits + 1e-6)
+
+            # Combined estimate
+            combined_value = (1 - beta) * q_value + beta * amaf_value
+            score = combined_value + c * exploration
             if score > best_score:
                 best_score = score
                 best_child = candidate
@@ -82,6 +97,10 @@ class MCTS(object):
     def backpropagation(self, reward):
         self.visits += 1
         self.q_value += reward
+        # Update AMAF statistics for all actions in the history
+        for action in set(self.action_history):
+            self.amaf_visits[action] = self.amaf_visits.get(action, 0) + 1
+            self.amaf_values[action] = self.amaf_values.get(action, 0) + reward
         if self.parent is not None:
             self.parent.backpropagation(reward)
 
@@ -126,7 +145,7 @@ class MCTS(object):
         return reward  # Return reward from rollout
 
     def run_mcts(self):
-        time_limit = 0.95  # Slightly reduced for safety
+        time_limit = 0.95
         start = time.time()
         end_time = start + time_limit
         while time.time() < end_time:
@@ -184,7 +203,7 @@ class OffensiveAgent(CaptureAgent):
         myPos = gameState.getAgentPosition(self.index)
         for g in ghosts:
             distance = self.getMazeDistance(myPos, gameState.getAgentPosition(g))
-            if distance <= 5:
+            if distance <= 4:
                 dangerGhosts.append(g)
         return dangerGhosts
 

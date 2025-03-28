@@ -64,7 +64,7 @@ class MCTS(object):
     def best_child_node(self):
         best_score = -np.inf
         best_child = None
-        c = 1.4  # Exploration constant, adjust as needed. Smaller values favor exploitation
+        c = 1  # Exploration constant, adjust as needed. Smaller values favor exploitation
 
         for candidate in self.child:
             score = candidate.q_value / (candidate.visits + 1e-6) + c * math.sqrt(math.log(self.visits + 1) / (candidate.visits + 1e-6))  # Adding small value to avoid division by zero
@@ -94,7 +94,7 @@ class MCTS(object):
         return value
 
     def run_mcts(self):
-        time_limit = 0.95  # Slightly reduced for safety
+        time_limit = 0.95
         start = time.time()
         end_time = start + time_limit
         while time.time() < end_time:
