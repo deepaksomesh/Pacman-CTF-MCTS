@@ -6,6 +6,7 @@ import re
 
 team1 = "mctsteam"
 team2 = "baselineteam"
+runs = 10
 
 # Elo rating system implementation
 class EloRating:
@@ -65,7 +66,7 @@ def run_match():
 
 # Elo rating calculation loop
 elo = EloRating()
-num_matches = 5  # Number of matches to run
+num_matches = runs  # Number of matches to run
 
 for i in range(num_matches):
     print(f"Running match {i + 1}...")
