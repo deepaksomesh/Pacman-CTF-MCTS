@@ -37,7 +37,7 @@ class MCTS(object):
         self.amaf_visits = {}  # Dictionary to track AMAF visits per action
         self.amaf_values = {}  # Dictionary to track AMAF values per action
         self.action_history = [] if parent is None else parent.action_history + [action]
-        self.beta = 1500
+        self.beta = 0.5
 
         self.gameState = gameState.deepCopy()
         self.enemy = enemy

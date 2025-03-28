@@ -4,8 +4,8 @@ import math
 import re
 
 
-team1 = "mctsteam"
-team2 = "baselineteam"
+team1 = "heavyplayoutteam"
+team2 = "mctsteam"
 runs = 10
 
 # Elo rating system implementation
