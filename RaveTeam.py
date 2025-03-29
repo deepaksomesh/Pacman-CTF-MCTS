@@ -68,7 +68,7 @@ class MCTS(object):
 
     # Upped Confidence Bound (UCT)
     def best_child_node(self):
-        best_score = -np.inf
+        best_score = float('-inf')
         best_child = None
         c = 1
 

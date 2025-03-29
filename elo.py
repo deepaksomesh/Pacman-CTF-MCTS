@@ -4,7 +4,7 @@ import math
 import re
 
 
-team1 = "heavyplayoutteam"
+team1 = "raveteam"
 team2 = "mctsteam"
 runs = 10
 
