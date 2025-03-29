@@ -25,73 +25,74 @@ def createTeam(firstIndex, secondIndex, isRed,
 class MCTS(object):
 
     def __init__(self, gameState, agent, action, parent, enemy, crossline):
-        self.parent = parent
+        self.gameState = gameState.deepCopy()
+        self.agent = agent
         self.action = action
+        self.parent = parent
+        self.child = []
+        self.enemy = enemy
+        self.crossline = crossline
+
         self.max_node_depth = 10
         self.depth = parent.depth + 1 if parent else 0
+        self.rewards = 0
 
-        self.child = []
-        self.visits = 0 # Initialized to 0
+        self.visits = 0
         self.q_value = 0.0
-        # RAVE-specific statistics
-        self.amaf_visits = {}  # Dictionary to track AMAF visits per action
-        self.amaf_values = {}  # Dictionary to track AMAF values per action
+        # RAVE
+        self.amaf_visits = {}
+        self.amaf_values = {}
         self.action_history = [] if parent is None else parent.action_history + [action]
         self.beta = 0.5
 
-        self.gameState = gameState.deepCopy()
-        self.enemy = enemy
         self.legalActions = [act for act in gameState.getLegalActions(agent.index) if act != Directions.STOP]
         self.available_actions = self.legalActions[:]
-        self.crossline = crossline
 
-        self.agent = agent
-        self.rewards = 0
-
+    # Select and Expand the best child node
     def select_and_expand(self):
         if self.depth >= self.max_node_depth:
             return self
 
-        if self.available_actions:  # Check if unexploredActions is not empty.
+        if self.available_actions:
             action = self.available_actions.pop()
             next_game_state = self.gameState.generateSuccessor(self.agent.index, action)
             child_node = MCTS(next_game_state, self.agent, action, self, self.enemy, self.crossline)
             self.child.append(child_node)
             return child_node
 
-        # Simplified exploration/exploitation with a bias towards exploitation (less random)
-        if self.child:  # Check if there are any children before trying to choose one.
+
+        if self.child:
             return self.best_child_node().select_and_expand()
         else:
-            return self  # Return self if no children to expand
+            return self
 
-
+    # Upped Confidence Bound (UCT)
     def best_child_node(self):
         best_score = -np.inf
         best_child = None
-        c = 1  # Exploration constant, adjust as needed. Smaller values favor exploitation
+        c = 1
 
-        for candidate in self.child:
-            if candidate.visits == 0:
-                return candidate
+        for i in self.child:
+            if i.visits == 0:
+                return i
             # Regular UCT value
-            q_value = candidate.q_value / candidate.visits
-            exploration = math.sqrt(math.log(self.visits) / candidate.visits)
+            q_value = i.q_value / i.visits
+            exploration = math.sqrt(math.log(self.visits) / i.visits)
 
             # RAVE value
-            amaf_visits = self.amaf_visits.get(candidate.action, 0)
-            amaf_value = self.amaf_values.get(candidate.action, 0) / (amaf_visits if amaf_visits > 0 else 1)
+            amaf_visits = self.amaf_visits.get(i.action, 0)
+            amaf_value = self.amaf_values.get(i.action, 0) / (amaf_visits if amaf_visits > 0 else 1)
 
             # Beta parameter for mixing Q and AMAF values
             beta = amaf_visits / (
-                    candidate.visits + amaf_visits + self.beta * candidate.visits * amaf_visits + 1e-6)
+                    i.visits + amaf_visits + self.beta * i.visits * amaf_visits + 1e-6)
 
             # Combined estimate
             combined_value = (1 - beta) * q_value + beta * amaf_value
             score = combined_value + c * exploration
             if score > best_score:
                 best_score = score
-                best_child = candidate
+                best_child = i
         return best_child
 
     def backpropagation(self, reward):
@@ -107,7 +108,7 @@ class MCTS(object):
 
     def reward(self):
         current_pos = self.gameState.getAgentPosition(self.agent.index)
-        # Penalize returning to the start, but less severely
+        # Penalize returning to the start
         if current_pos == self.gameState.getInitialAgentPosition(self.agent.index):
             return -100
 
@@ -115,10 +116,10 @@ class MCTS(object):
         weights = {'distance': -1}
         current_pos = self.gameState.getAgentPosition(self.agent.index)
         feature['distance'] = min([self.agent.getMazeDistance(current_pos, crossline_pos) for crossline_pos in self.crossline])
-
         value = feature * weights
         return value
 
+    # MCTS Search
     def run_mcts(self):
         time_limit = 0.95
         start = time.time()
@@ -130,7 +131,6 @@ class MCTS(object):
 
         return self.best_child_node().action
 
-# --------------------------------------------------------------------------
 
 ##########
 # Agents #
@@ -150,10 +150,10 @@ class OffensiveAgent(CaptureAgent):
         """
         walls = gameState.getWalls().asList()
         if self.red:
-            border_x = self.layout_width // 2 - 1
+            border = self.layout_width // 2 - 1
         else:
-            border_x = self.layout_width // 2
-        border_line = [(border_x, h) for h in range(self.layout_height)]
+            border = self.layout_width // 2
+        border_line = [(border, h) for h in range(self.layout_height)]
         return [(x, y) for (x, y) in border_line if (x, y) not in walls and (x + 1 - 2*self.red, y) not in walls]
 
     def enemy(self, gameState):
@@ -173,14 +173,14 @@ class OffensiveAgent(CaptureAgent):
         """
         Return Observable Oppo-Ghost Position Within 5 Steps
         """
-        dangerGhosts = []
+        enemyGhosts = []
         ghosts = self.enemy(gameState)
         myPos = gameState.getAgentPosition(self.index)
-        for g in ghosts:
-            distance = self.getMazeDistance(myPos, gameState.getAgentPosition(g))
+        for i in ghosts:
+            distance = self.getMazeDistance(myPos, gameState.getAgentPosition(i))
             if distance <= 5:
-                dangerGhosts.append(g)
-        return dangerGhosts
+                enemyGhosts.append(i)
+        return enemyGhosts
 
     def chooseAction(self, gameState):
         """
@@ -189,11 +189,8 @@ class OffensiveAgent(CaptureAgent):
         actions = gameState.getLegalActions(self.index)
         agent_state = gameState.getAgentState(self.index)
 
-        carrying = agent_state.numCarrying
-        isPacman = agent_state.isPacman
-
-        if isPacman:
-            return self.handleOffense(gameState, actions, carrying)
+        if agent_state.isPacman:
+            return self.handleOffense(gameState, actions, agent_state.numCarrying)
         else:
             return self.handleDefense(gameState, actions)
 
@@ -211,11 +208,11 @@ class OffensiveAgent(CaptureAgent):
             action_chosen = random.choice(bestActions)
 
         elif len(foodList) < 2 or carrying > 7:
-            rootNode = MCTS(gameState, self, None, None, appr_ghost_pos, self.borders)
-            action_chosen = MCTS.run_mcts(rootNode)
+            Node = MCTS(gameState, self, None, None, appr_ghost_pos, self.borders)
+            action_chosen = MCTS.run_mcts(Node)
         else:
-            rootNode = MCTS(gameState, self, None, None, appr_ghost_pos, self.borders)
-            action_chosen = MCTS.run_mcts(rootNode)
+            Node = MCTS(gameState, self, None, None, appr_ghost_pos, self.borders)
+            action_chosen = MCTS.run_mcts(Node)
 
         return action_chosen
 
@@ -233,7 +230,7 @@ class OffensiveAgent(CaptureAgent):
 
     def evaluate_state_off(self, gameState, action):
         """
-        Computes a linear combination of features and feature weights
+        Offensive State Evaluation
         """
 
         features = util.Counter()
@@ -249,35 +246,29 @@ class OffensiveAgent(CaptureAgent):
 
     def evaluate_state_def(self, gameState, action, ghosts):
         """
-        Computes a linear combination of features and feature weights
+        Defensive State Evaluation
         """
-        features = self.get_def_features(gameState, action)
-        weights = self.get_def_weights(gameState, action)
+        features = self.get_features(gameState, action)
+        weights = self.get_weights(gameState, action)
         return features * weights
 
-    def get_def_features(self, gameState, action):
-        """
-        Returns a counter of features for the state
-        """
+    def get_features(self, gameState, action):
         features = util.Counter()
         successor = self.get_next_state(gameState, action)
         foodList = self.getFood(successor).asList()
         features['successorScore'] = -len(foodList)  # self.getScore(successor)
 
-        if len(foodList) > 0:  # This should always be True,  but better safe than sorry
+        if len(foodList) > 0:
             current_pos = successor.getAgentState(self.index).getPosition()
             min_distance = min([self.getMazeDistance(current_pos, food) for food in foodList])
             features['distanceToFood'] = min_distance
         return features
 
-    def get_def_weights(self, gameState, action):
+    def get_weights(self, gameState, action):
 
         return {'successorScore': 100, 'distanceToFood': -1}
 
     def get_next_state(self, gameState, action):
-        """
-        Finds the next successor which is a grid position (location tuple).
-        """
         successor = gameState.generateSuccessor(self.index, action)
         return successor
 
@@ -289,7 +280,7 @@ class DefensiveReflexAgent(OffensiveAgent):
     such an agent.
     """
 
-    def get_def_features(self, gameState, action):
+    def get_features(self, gameState, action):
         features = util.Counter()
         next_state = self.get_next_state(gameState, action)
 
@@ -314,6 +305,6 @@ class DefensiveReflexAgent(OffensiveAgent):
 
         return features
 
-    def get_def_weights(self, gameState, action):
+    def get_weights(self, gameState, action):
         return {'numInvaders': -1000, 'onDefense': 100, 'invaderDistance': -10, 'stop': -100, 'reverse': -2}
 

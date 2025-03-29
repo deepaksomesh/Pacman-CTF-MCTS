@@ -8,7 +8,7 @@ team1 = "heavyplayoutteam"
 team2 = "mctsteam"
 runs = 10
 
-# Elo rating system implementation
+
 class EloRating:
     def __init__(self, k=32, initial_rating=1500):
         self.k = k
@@ -28,7 +28,6 @@ class EloRating:
         return self.ratings
 
 
-# Function to run a match and return scores
 def run_match():
 
     cmd = [
@@ -64,9 +63,9 @@ def run_match():
         return None, None
 
 
-# Elo rating calculation loop
+
 elo = EloRating()
-num_matches = runs  # Number of matches to run
+num_matches = runs
 
 for i in range(num_matches):
     print(f"Running match {i + 1}...")
@@ -83,7 +82,7 @@ for i in range(num_matches):
     print(f"Match {i + 1} result: Red {red_score} - Blue {blue_score}")
     print("Updated Elo Ratings:", elo.get_ratings())
 
-# Final Elo ratings
+
 print("\nFinal Elo Ratings:")
 print(f"{team1}: ", elo.get_ratings()["Team 1"])
 print(f"{team2}: ", elo.get_ratings()["Team 2"])
